@@ -201,6 +201,12 @@
   .theme-btn small{
     display:block; margin-top:5px; font-size:10px; font-weight:700; color:var(--navy);
   }
+  .piece-style-preview{
+    width:100%; aspect-ratio:1; border-radius:8px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--board-light); border:1px solid rgba(0,0,0,0.08);
+  }
+  .piece-style-preview .piece-svg{ width:60%; height:60%; }
 
   /* ---------- GAME SCREEN ---------- */
   .game-header{
@@ -356,6 +362,10 @@
       <div class="field">
         <label>🎨 Board Theme</label>
         <div class="theme-grid" id="theme-grid"></div>
+      </div>
+      <div class="field">
+        <label>♞ Piece Style</label>
+        <div class="theme-grid" id="piece-style-grid"></div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>🔊 Sound</label>
@@ -576,6 +586,7 @@ document.getElementById('btn-settings').addEventListener('click', function(){
   document.getElementById('setting-sound').value = settings.sound;
   document.getElementById('sound-value').textContent = settings.sound + '%';
   renderThemeOptions();
+  renderPieceStyleOptions();
   setTimeout(()=> showScreen('settings'), 150);
 });
 
@@ -862,11 +873,36 @@ const SOUND_FILES = {
   click:     'sounds/Button.mp3'
 };
 const SOUNDS = {};
+let __soundErrorShown = false;
 Object.keys(SOUND_FILES).forEach(key=>{
   const audio = new Audio(SOUND_FILES[key]);
   audio.preload = 'auto';
+  audio.addEventListener('error', function(){
+    if(!__soundErrorShown){
+      __soundErrorShown = true;
+      alert('Sound file load nahi ho payi: ' + SOUND_FILES[key] + '\n\nCheck karein: "sounds" folder index.html ke saath, same naam ke saath maujood hai ya nahi.');
+    }
+  });
+  audio.load();
   SOUNDS[key] = audio;
 });
+
+/* Some mobile browsers block audio until the very first tap "unlocks" it */
+let audioUnlocked = false;
+function unlockAudio(){
+  if(audioUnlocked) return;
+  audioUnlocked = true;
+  Object.values(SOUNDS).forEach(a=>{
+    try{
+      const p = a.play();
+      if(p && p.then){
+        p.then(()=>{ a.pause(); a.currentTime = 0; }).catch(()=>{});
+      }
+    }catch(e){}
+  });
+}
+document.addEventListener('touchstart', unlockAudio, {once:true});
+document.addEventListener('click', unlockAudio, {once:true});
 
 function playSound(key){
   if(!settings.sound) return;
