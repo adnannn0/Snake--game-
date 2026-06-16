@@ -545,6 +545,11 @@ let eloUpdated = false;     // prevent double elo updates per game
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
+  if(id === 'game'){
+    startBgMusic();
+  } else {
+    stopBgMusic();
+  }
 }
 document.querySelectorAll('[data-back]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -594,6 +599,7 @@ document.getElementById('btn-settings').addEventListener('click', function(){
 const soundSlider = document.getElementById('setting-sound');
 soundSlider.addEventListener('input', ()=>{
   document.getElementById('sound-value').textContent = soundSlider.value + '%';
+  if(typeof updateBgMusicVolume === 'function') updateBgMusicVolume();
 });
 document.getElementById('btn-save-settings').addEventListener('click', function(){
   pressFx(this);
@@ -863,7 +869,6 @@ document.getElementById('btn-undo').addEventListener('click', function(){
 
 /* ============ SOUND ============ */
 const SOUND_FILES = {
-  move:      'sounds/chess.mp3',
   capture:   'sounds/capture.mp3',
   castle:    'sounds/castling.mp3',
   check:     'sounds/check.mp3',
@@ -873,19 +878,37 @@ const SOUND_FILES = {
   click:     'sounds/Button.mp3'
 };
 const SOUNDS = {};
-let __soundErrorShown = false;
 Object.keys(SOUND_FILES).forEach(key=>{
   const audio = new Audio(SOUND_FILES[key]);
   audio.preload = 'auto';
-  audio.addEventListener('error', function(){
-    if(!__soundErrorShown){
-      __soundErrorShown = true;
-      alert('Sound file load nahi ho payi: ' + SOUND_FILES[key] + '\n\nCheck karein: "sounds" folder index.html ke saath, same naam ke saath maujood hai ya nahi.');
-    }
+  audio.addEventListener('error', function(e){
+    console.error('Sound load failed:', SOUND_FILES[key], e);
   });
   audio.load();
   SOUNDS[key] = audio;
 });
+
+/* Background music (chess.mp3) - loops continuously while sound is on */
+const bgMusic = new Audio('sounds/chess.mp3');
+bgMusic.loop = true;
+bgMusic.preload = 'auto';
+bgMusic.addEventListener('error', function(e){
+  console.error('Sound load failed:', 'sounds/chess.mp3', e);
+});
+bgMusic.load();
+
+function updateBgMusicVolume(){
+  bgMusic.volume = Math.min(1, Math.max(0, settings.sound / 100));
+}
+function startBgMusic(){
+  if(!settings.sound) return;
+  updateBgMusicVolume();
+  bgMusic.play().catch(()=>{});
+}
+function stopBgMusic(){
+  bgMusic.pause();
+  bgMusic.currentTime = 0;
+}
 
 /* Some mobile browsers block audio until the very first tap "unlocks" it */
 let audioUnlocked = false;
@@ -900,6 +923,11 @@ function unlockAudio(){
       }
     }catch(e){}
   });
+  try{
+    bgMusic.play().then(()=>{
+      if(!settings.sound){ bgMusic.pause(); bgMusic.currentTime = 0; }
+    }).catch(()=>{});
+  }catch(e){}
 }
 document.addEventListener('touchstart', unlockAudio, {once:true});
 document.addEventListener('click', unlockAudio, {once:true});
@@ -915,14 +943,14 @@ function playSound(key){
   }catch(e){}
 }
 
-/* Decide which sound to play after a move is made */
+/* Decide which one-shot sound to play after a move is made (no sound for a plain quiet move) */
 function moveSoundKey(move, gAfter){
   if(gAfter.in_checkmate()) return 'checkmate';
   if(gAfter.in_draw() || gAfter.in_stalemate() || gAfter.in_threefold_repetition()) return 'stalemate';
   if(gAfter.in_check()) return 'check';
   if(move.flags && (move.flags.includes('k') || move.flags.includes('q'))) return 'castle';
   if(move.captured) return 'capture';
-  return 'move';
+  return null;
 }
 
 /* ============ COMPUTER AI ============ */
